@@ -1,7 +1,7 @@
 {
-    "name": "math",
-    "description": "Mathematics.",
-    "repository": "https://github.com/TheUnblockedHubOfficial/The-Unblocked-Hub",
-    "logo": "https://github.com/TheUnblockedHubOfficial/The-Unblocked-Hub/blob/main/static/assets/images/branding/favicon/in.png",
-    "keywords": ["school", "Project-Luma", "ultraviolet"]
-  }
+  "name": "The Unblocked Hub",
+  "description": "Ending Internet Censorship since 2023.",
+  "repository": "https://github.com/TheUnblockedHubOfficial/The-Unblocked-Hub",
+  "logo": "https://raw.githubusercontent.com/TheUnblockedHubOfficial/The-Unblocked-Hub/main/static/icon.png",
+  "keywords": ["Unblocked"]
+}

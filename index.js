@@ -1,104 +1,97 @@
-import cluster from "cluster";
-import os from "os";
-import express from "express";
-import http from "node:http";
-import createBareServer from "@tomphttp/bare-server-node";
-import path from "node:path";
-import * as dotenv from "dotenv";
-dotenv.config();
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { hostname } from 'node:os';
+import { createServer } from 'node:http';
+import createBareServer from '@tomphttp/bare-server-node';
+import express from 'express';
+// "@titaniumnetwork-dev/ultraviolet": "^1.0.5",
+//import { uvPath } from '@titaniumnetwork-dev/ultraviolet';
+import { getLastCommit } from 'git-last-commit';
+import axios from 'axios';
 
-const __dirname = process.cwd();
+getLastCommit((err, commit) => {
+  if (!err) console.log(`Latest update: ${commit.subject} (${commit.committer.name})`);
+});
 
-// Increase max sockets to 1000
-http.globalAgent.maxSockets = 1000;
+const publicPath = fileURLToPath(new URL('./static/', import.meta.url));
+const bare = createBareServer('/bare/');
+const server = createServer();
+const app = express();
+/*
+Trust proxy by default, if you are self hosting and not behind a reverse proxy,
+you should disable this.
+*/
+app.set('trust proxy', true);
+let dataScript;
+const port = process.env.PORT || 3000;
 
-if (cluster.isMaster) {
-  const numCPUs = os.cpus().length;
-  console.log(`Master process running with PID ${process.pid}`);
-
-  // Fork worker processes
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
-  }
-
-  // Handle worker exit events
-  cluster.on("exit", (worker, code, signal) => {
-    console.log(
-      `Worker ${worker.process.pid} died with code ${code} and signal ${signal}`
-    );
-    console.log("Forking a new worker...");
-    cluster.fork();
-  });
-} else {
-  const server = http.createServer();
-  const app = express(server);
-  const bareServer = createBareServer("/bare/");
-
-  // Serve static files with caching
-  const staticOptions = {
-    maxAge: "1d",
-    setHeaders: (res, path) => {
-      if (path.endsWith(".html")) {
-        res.setHeader("Cache-Control", "no-cache");
-      } else {
-        res.setHeader("Cache-Control", "public, max-age=86400");
-      }
-    },
-  };
-  app.use(express.static(path.join(__dirname, "static"), staticOptions));
-
-  app.use(express.json());
-  app.use(
-    express.urlencoded({
-      extended: true,
-    })
-  );
-
-  // Define routes
-  const routes = [
-    { path: "/", file: "index.html" },
-    { path: "/web", file: "web.html" },
-    { path: "/play", file: "play.html" },
-    { path: "/apps", file: "apps.html" },
-    { path: "/chat", file: "chat.html" },
-    { path: "/go", file: "go.html" },
-    { path: "/settings", file: "settings.html" },
-    { path: "/donate", file: "donate.html" },
-    { path: "/404", file: "404.html" },
-  ];
-
-  // Define routes using the routes array
-  routes.forEach((route) => {
-    app.get(route.path, (req, res) => {
-      res.sendFile(path.join(__dirname, "static", route.file));
+app.use(express.static(publicPath));
+//app.use('/uv/', express.static(uvPath));
+app.post("/data/event", express.json({
+  type: 'text'
+}));
+app.post("/data/event", async (req, res, next) => {
+  try {
+    const data = await axios({
+      method: 'post',
+      url: 'site-theunblockedhubofficial.koyeb.app/api/event',
+      headers: {
+        'Host': 'site-theunblockedhubofficial.koyeb.app',
+        'X-Forwarded-For': req.ip,
+        'X-Forwarded-Host': req.headers.host,
+        'Content-Type': 'application/json',
+        'User-Agent': req.headers['user-agent']
+      },
+      data: JSON.stringify(req.body),
+      validateStatus: () => true
     });
-  });
+    if(!data.data) return next();
+    res.json(data.data);
+  } catch(err) {
+    next(err);
+  }
+});
 
-  // Catch-all route
-  app.get("/*", (req, res) => {
-    res.redirect("/404");
-  });
+app.get('/data/script.js', async (req, res, next) => {
+  try {
+    if(!dataScript) {
+      const { data } = await axios({
+        method: 'get',
+        url: 'https://plausible.artclass.site/js/script.js'
+      });
+      dataScript = data;
+    };
+    res.set('Content-Type', 'application/javascript');
+    res.end(dataScript);
+  } catch(err) {
+    next(err);
+  }
+});
 
-  // Bare Server
-  server.on("request", (req, res) => {
-    if (bareServer.shouldRoute(req)) {
-      bareServer.routeRequest(req, res);
-    } else {
-      app(req, res);
-    }
-  });
+app.use((req, res) => res.status(404).sendFile(join(publicPath, '404.html')));
+server.on('request', (req, res) => {
+  if (bare.shouldRoute(req)) {
+    bare.routeRequest(req, res);
+  } else {
+    app(req, res);
+  }
+});
 
-  server.on("upgrade", (req, socket, head) => {
-    if (bareServer.shouldRoute(req)) {
-      bareServer.routeUpgrade(req, socket, head);
-    } else {
-      socket.end();
-    }
-  });
+server.on('upgrade', (req, socket, head) => {
+  if (bare.shouldRoute(req)) {
+    bare.routeUpgrade(req, socket, head);
+  } else {
+    socket.end();
+  }
+});
 
-  server.listen({
-    port: process.env.PORT,
-  });
-
-  console.log(`Worker process running with PID ${process.pid}`);
-}
+server.listen({ port }, () => {
+  console.log('Listening on:');
+  console.log(`\thttp://localhost:${server.address().port}`);
+  console.log(`\thttp://${hostname()}:${server.address().port}`);
+  console.log(
+    `\thttp://${
+      server.address().family === 'IPv6' ? `[${server.address().address}]` : server.address().address
+    }:${server.address().port}`
+  );
+});

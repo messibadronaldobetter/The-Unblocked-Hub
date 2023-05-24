@@ -1,2 +1,9 @@
+node_modules/
+.config/
+.upm/
+.git/
 
-.DS_Store
+replit.nix
+.replit
+server.cert
+server.key
