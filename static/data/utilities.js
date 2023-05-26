@@ -9,4 +9,9 @@ var utilities = [
     'title': 'Bookmarklets',
     'url': '/utils/bookmarklets.html'
   }
+  {
+    'id': 'chatroom',
+    'title': 'Chatroom',
+    'url': '/utils/widgetbot.html'
+  }
 ]
